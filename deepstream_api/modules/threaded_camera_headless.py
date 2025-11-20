@@ -1,0 +1,292 @@
+"""
+Wrapper thread-safe para DeepStreamCamera
+Permite ejecutar múltiples cámaras en paralelo usando threading
+"""
+import threading
+import queue
+import time
+from typing import Dict, Optional
+import gi
+
+gi.require_version('Gst', '1.0')
+from gi.repository import GLib, Gst
+
+from .deepstream_camera_headless import DeepStreamCameraHeadless
+
+
+class ThreadedDeepStreamCamera:
+    """
+    Wrapper thread-safe para DeepStreamCamera
+
+    Cada cámara ejecuta en su propio thread con GLib.MainLoop dedicado
+    """
+
+    def __init__(self, camera_id: int, camera_name: str,
+                 rtsp_uri: str, line_config: dict):
+        """
+        Inicializa wrapper de cámara con threading
+
+        Args:
+            camera_id: ID de la cámara
+            camera_name: Nombre descriptivo
+            rtsp_uri: URI RTSP completa
+            line_config: Configuración de línea de cruce
+        """
+        self.camera_id = camera_id
+        self.camera_name = camera_name
+        self.rtsp_uri = rtsp_uri
+        self.line_config = line_config
+
+        # Thread management
+        self.thread: Optional[threading.Thread] = None
+        self.command_queue: queue.Queue = queue.Queue()
+        self.is_running = threading.Event()
+        self.started = threading.Event()
+        self.error_event = threading.Event()
+        self.error_msg: Optional[str] = None
+
+        # DeepStream instance (creado en el thread)
+        self.deepstream_instance = None
+
+        # Thread-local GLib context
+        self._glib_context = None
+
+        # Métricas de rendimiento
+        self.metrics = {
+            'fps': 0.0,
+            'frame_count': 0,
+            'last_update': time.time()
+        }
+        self.metrics_lock = threading.Lock()
+
+    def start(self) -> bool:
+        """
+        Inicia procesamiento de cámara en thread dedicado
+
+        Returns:
+            True si se inició exitosamente
+        """
+        if self.thread and self.thread.is_alive():
+            print(f"⚠️  Camera {self.camera_id} ya está corriendo")
+            return False
+
+        self.is_running.set()
+        self.thread = threading.Thread(
+            target=self._run_camera_thread,
+            name=f"Camera-{self.camera_id}-Thread",
+            daemon=False
+        )
+        self.thread.start()
+
+        # Esperar a que el thread se inicialice (timeout 30s - suficiente para RTSP lento)
+        print(f"⏳ Esperando inicialización de cámara {self.camera_id}...")
+        if not self.started.wait(timeout=30.0):
+            print(f"❌ Camera {self.camera_id} no se inició en 30 segundos")
+            self.is_running.clear()
+            return False
+
+        if self.error_event.is_set():
+            print(f"❌ Camera {self.camera_id} error: {self.error_msg}")
+            return False
+
+        return True
+
+    def _run_camera_thread(self):
+        """
+        Función principal del thread - ejecuta GLib.MainLoop
+        """
+        try:
+            # Establecer nombre del thread para debugging
+            threading.current_thread().name = f"Camera-{self.camera_id}"
+
+            # Inicializar GStreamer en este thread
+            Gst.init(None)
+
+            # Crear contexto GLib thread-local
+            # Esto asegura que GLib.MainLoop no interfiera con otros threads
+            self._glib_context = GLib.MainContext.new()
+            GLib.MainContext.push_thread_default(self._glib_context)
+
+            print(f"[Thread {self.camera_id}] Iniciando thread de cámara...")
+
+            # Crear instancia DeepStream
+            print(f"[Thread {self.camera_id}] 📹 Creando instancia DeepStreamCameraHeadless...")
+            self.deepstream_instance = DeepStreamCameraHeadless(
+                camera_id=self.camera_id,
+                camera_name=self.camera_name,
+                rtsp_uri=self.rtsp_uri,
+                line_config=self.line_config
+            )
+
+            # Crear pipeline
+            print(f"[Thread {self.camera_id}] 🔧 Creando pipeline GStreamer...")
+            if not self.deepstream_instance.create_pipeline():
+                raise RuntimeError("Fallo al crear pipeline")
+
+            # Establecer pipeline a PLAYING
+            print(f"[Thread {self.camera_id}] ▶️  Estableciendo pipeline a PLAYING...")
+            self.deepstream_instance.pipeline.set_state(Gst.State.PLAYING)
+
+            # Señalar inicio exitoso
+            self.started.set()
+            print(f"[Thread {self.camera_id}] ✅ Pipeline iniciado exitosamente")
+
+            # Crear GLib.MainLoop con contexto thread-local
+            self.deepstream_instance.loop = GLib.MainLoop(self._glib_context)
+
+            # Verificar comandos de stop periódicamente
+            GLib.timeout_add(100, self._check_commands)
+
+            # Actualizar métricas cada segundo
+            GLib.timeout_add(1000, self._update_metrics)
+
+            # LLAMADA BLOQUEANTE - corre hasta que se llame loop.quit()
+            self.deepstream_instance.loop.run()
+
+            print(f"[Thread {self.camera_id}] MainLoop finalizado")
+
+        except Exception as e:
+            self.error_msg = str(e)
+            self.error_event.set()
+            self.started.set()  # Desbloquear llamador de start()
+            print(f"❌ [Thread {self.camera_id}] Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        finally:
+            # Limpieza
+            self._cleanup_thread()
+            self.is_running.clear()
+            print(f"[Thread {self.camera_id}] Thread finalizando")
+
+    def _check_commands(self) -> bool:
+        """
+        Verifica cola de comandos y los maneja
+
+        Returns:
+            True para continuar verificando, False para detener
+        """
+        try:
+            # Verificación no bloqueante
+            cmd = self.command_queue.get_nowait()
+
+            if cmd == "STOP":
+                print(f"[Thread {self.camera_id}] Comando STOP recibido")
+                if self.deepstream_instance and self.deepstream_instance.loop:
+                    self.deepstream_instance.loop.quit()
+                return False  # Detener timer
+
+        except queue.Empty:
+            pass
+
+        # Continuar verificando si aún está corriendo
+        return self.is_running.is_set()
+
+    def _update_metrics(self) -> bool:
+        """
+        Actualiza métricas de rendimiento (FPS)
+
+        Returns:
+            True para continuar actualizando
+        """
+        if not self.deepstream_instance:
+            return False
+
+        with self.metrics_lock:
+            now = time.time()
+            elapsed = now - self.metrics['last_update']
+
+            if elapsed >= 1.0:
+                # Calcular FPS basado en frame_count del DeepStreamCamera
+                frame_count = self.deepstream_instance.frame_count
+                self.metrics['fps'] = frame_count / elapsed if elapsed > 0 else 0.0
+
+                # Resetear contador de frames en DeepStreamCamera
+                self.deepstream_instance.frame_count = 0
+                self.metrics['last_update'] = now
+
+                # Mostrar métricas cada 5 segundos
+                if int(now) % 5 == 0:
+                    stats = self.get_stats()
+                    print(f"[Camera {self.camera_id}] FPS: {self.metrics['fps']:.1f} | "
+                          f"Entradas: {stats['entradas']} | Salidas: {stats['salidas']} | "
+                          f"Dentro: {stats['dentro']}")
+
+        return self.is_running.is_set()
+
+    def stop(self, timeout: float = 8.0):
+        """
+        Detiene procesamiento de cámara gracefully
+
+        Args:
+            timeout: Tiempo máximo de espera para detener el thread
+        """
+        if not self.is_running.is_set() and not (self.thread and self.thread.is_alive()):
+            print(f"[Main] Cámara {self.camera_id} ya está detenida")
+            return
+
+        print(f"[Main] Deteniendo cámara {self.camera_id}...")
+
+        # Enviar comando de stop
+        self.command_queue.put("STOP")
+        self.is_running.clear()
+
+        # Esperar a que el thread finalice
+        if self.thread:
+            self.thread.join(timeout=timeout)
+            if self.thread.is_alive():
+                print(f"⚠️  Thread de cámara {self.camera_id} no se detuvo en {timeout}s")
+            else:
+                print(f"✅ Cámara {self.camera_id} detenida correctamente")
+
+    def _cleanup_thread(self):
+        """
+        Limpia recursos en el thread de cámara
+        Debe ejecutarse en el thread de cámara
+        """
+        try:
+            if self.deepstream_instance:
+                # Detener pipeline
+                if self.deepstream_instance.pipeline:
+                    self.deepstream_instance.pipeline.set_state(Gst.State.NULL)
+
+            # Pop thread-local GLib context solo si existe
+            if self._glib_context:
+                try:
+                    GLib.MainContext.pop_thread_default(self._glib_context)
+                except:
+                    # Ignorar errores de GLib context en cleanup
+                    pass
+
+        except Exception as e:
+            print(f"⚠️  Error durante limpieza: {e}")
+
+    def get_stats(self) -> Dict:
+        """
+        Obtiene estadísticas de la cámara
+
+        Returns:
+            Diccionario con contadores (copia read-only)
+        """
+        if self.deepstream_instance:
+            return self.deepstream_instance.contadores.copy()
+        return {'entradas': 0, 'salidas': 0, 'dentro': 0}
+
+    def get_fps(self) -> float:
+        """
+        Obtiene FPS actual
+
+        Returns:
+            FPS como float
+        """
+        with self.metrics_lock:
+            return self.metrics['fps']
+
+    def is_alive(self) -> bool:
+        """
+        Verifica si el thread de cámara está vivo
+
+        Returns:
+            True si el thread está corriendo
+        """
+        return self.thread is not None and self.thread.is_alive()

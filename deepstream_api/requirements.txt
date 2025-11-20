@@ -1,0 +1,2 @@
+# Dependencias Python para deepstream_api
+requests>=2.31.0

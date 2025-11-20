@@ -1,0 +1,20 @@
+# Configuraciones locales
+config/*.json
+
+# Logs
+logs/*.log
+logs/*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Cache de módulos
+modules/__pycache__/
+
+# Temporales
+*.tmp
+*.bak
+tracker_config.txt
