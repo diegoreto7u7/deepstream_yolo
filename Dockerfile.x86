@@ -1,0 +1,281 @@
+# ==============================================================================
+# Production-Ready Multi-Stage Dockerfile for DeepStream 8.0 + YOLO11x
+# Platform: x86_64 with NVIDIA GPUs (RTX 3090, 3080, TESLA T4, V100, etc.)
+# CUDA: 12.8 | TensorRT: 10.7.0 | DeepStream: 8.0.0
+# ==============================================================================
+
+# ==============================================================================
+# Stage 1: Base Image with DeepStream 8.0 for x86
+# ==============================================================================
+FROM nvcr.io/nvidia/deepstream:8.0-gc-triton-devel AS deepstream-base
+
+# Metadata
+LABEL maintainer="DeepStream YOLO Team"
+LABEL description="DeepStream 8.0 with YOLO11x for x86 NVIDIA GPUs (RTX 3090, 3080, TESLA)"
+LABEL version="2.0"
+LABEL cuda.version="12.8"
+LABEL tensorrt.version="10.7.0"
+LABEL deepstream.version="8.0.0"
+
+# Set environment variables for non-interactive installation
+ENV DEBIAN_FRONTEND=noninteractive \
+    DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0 \
+    CUDA_VER=12.8 \
+    TENSORRT_VER=10.7.0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=America/Los_Angeles
+
+# ==============================================================================
+# Stage 2: Build Stage - Compile custom libraries
+# ==============================================================================
+FROM deepstream-base AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build essentials
+    build-essential \
+    cmake \
+    pkg-config \
+    git \
+    wget \
+    curl \
+    ca-certificates \
+    # CUDA development tools (CUDA 12.8)
+    cuda-toolkit-12-8 \
+    cuda-cudart-dev-12-8 \
+    cuda-nvcc-12-8 \
+    # GStreamer development
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    # OpenCV and image processing
+    libopencv-dev \
+    # Additional development libraries
+    libssl-dev \
+    libffi-dev \
+    libjpeg-dev \
+    libpng-dev \
+    # Python development
+    python3-dev \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory for builds
+WORKDIR /workspace
+
+# Clone DeepStream-Yolo repository (official marcoslucianops implementation)
+RUN git clone --depth 1 https://github.com/marcoslucianops/DeepStream-Yolo.git /workspace/DeepStream-Yolo
+
+# Build custom YOLO library for DeepStream with CUDA 12.8
+WORKDIR /workspace/DeepStream-Yolo
+RUN CUDA_VER=12.8 make -C nvdsinfer_custom_impl_Yolo && \
+    ls -lh /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
+
+# Verify the compiled library exists and is valid
+RUN file /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so && \
+    ldd /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so || true
+
+# ==============================================================================
+# Stage 3: Python Environment - Model conversion and AI tools
+# ==============================================================================
+FROM builder AS python-builder
+
+# Upgrade pip and install Python packages for YOLO11 and model conversion
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir \
+    # YOLO11 and Ultralytics
+    ultralytics>=8.3.0 \
+    # ONNX tools for model conversion
+    onnx>=1.15.0 \
+    onnxslim>=0.1.31 \
+    onnxruntime-gpu>=1.17.0 \
+    # PyTorch for model export (CPU version to save space, GPU inference via TensorRT)
+    torch>=2.1.0 --index-url https://download.pytorch.org/whl/cpu \
+    torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/cpu \
+    # Computer vision and utilities
+    numpy>=1.24.0 \
+    opencv-python-headless>=4.9.0 \
+    pillow>=10.0.0 \
+    # Configuration and serialization
+    pyyaml>=6.0 \
+    # API and networking
+    requests>=2.31.0 \
+    # Progress and monitoring
+    tqdm>=4.65.0 \
+    psutil>=5.9.0 \
+    # GStreamer Python bindings
+    PyGObject>=3.42.0
+
+# Verify critical Python installations
+RUN python3 -c "import ultralytics; print(f'✓ Ultralytics: {ultralytics.__version__}')" && \
+    python3 -c "import onnx; print(f'✓ ONNX: {onnx.__version__}')" && \
+    python3 -c "import torch; print(f'✓ PyTorch: {torch.__version__}')" && \
+    python3 -c "import cv2; print(f'✓ OpenCV: {cv2.__version__}')"
+
+# ==============================================================================
+# Stage 4: Runtime Stage - Final production image
+# ==============================================================================
+FROM deepstream-base AS runtime
+
+# Install runtime dependencies only (smaller image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python runtime
+    python3 \
+    python3-pip \
+    python3-gi \
+    python3-gi-cairo \
+    gir1.2-gst-rtsp-server-1.0 \
+    # GStreamer plugins (comprehensive plugin support)
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-rtsp \
+    gstreamer1.0-alsa \
+    # OpenCV runtime libraries
+    libopencv-core4.5d \
+    libopencv-imgproc4.5d \
+    libopencv-highgui4.5d \
+    libopencv-videoio4.5d \
+    # System utilities
+    wget \
+    curl \
+    git \
+    vim \
+    nano \
+    htop \
+    tmux \
+    tree \
+    # Network tools for debugging
+    net-tools \
+    iputils-ping \
+    iproute2 \
+    # X11 and display support (for visualization)
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+    libxi6 \
+    libxcursor1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libxinerama1 \
+    x11-apps \
+    x11-utils \
+    # Additional tools
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy compiled libraries from builder stage
+COPY --from=builder /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so \
+    /opt/nvidia/deepstream/deepstream-8.0/lib/libnvdsinfer_custom_impl_Yolo.so
+
+# Copy Python packages from python-builder stage
+COPY --from=python-builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=python-builder /usr/local/bin /usr/local/bin
+
+# Copy DeepStream-Yolo utilities and configuration templates
+COPY --from=builder /workspace/DeepStream-Yolo/labels.txt \
+    /opt/nvidia/deepstream/deepstream-8.0/labels.txt
+COPY --from=builder /workspace/DeepStream-Yolo/config_infer_primary*.txt \
+    /opt/nvidia/deepstream/deepstream-8.0/
+
+# Set up application directory
+WORKDIR /app
+
+# Copy application files (excluding build artifacts via .dockerignore)
+COPY . /app/
+
+# Ensure the compiled library is also available in /app for compatibility
+RUN cp /opt/nvidia/deepstream/deepstream-8.0/lib/libnvdsinfer_custom_impl_Yolo.so \
+       /app/libnvdsinfer_custom_impl_Yolo.so
+
+# Ensure all scripts are executable
+RUN chmod +x /app/*.sh 2>/dev/null || true && \
+    chmod +x /app/deepstream_api/*.sh 2>/dev/null || true && \
+    chmod +x /app/deepstream_api/*.py 2>/dev/null || true && \
+    chmod +x /app/engines/*.py 2>/dev/null || true
+
+# Create necessary directories with proper permissions
+RUN mkdir -p \
+    /app/engines/tensorrt \
+    /app/engines/pt \
+    /app/engines/onnx \
+    /app/logs \
+    /app/configs/deepstream \
+    /app/output \
+    /app/recordings \
+    && chmod -R 755 /app/engines \
+    && chmod -R 755 /app/logs \
+    && chmod -R 755 /app/output \
+    && chmod -R 755 /app/recordings
+
+# Configure DeepStream environment variables
+ENV GST_PLUGIN_PATH=${GST_PLUGIN_PATH}:${DEEPSTREAM_DIR}/lib/gst-plugins \
+    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEEPSTREAM_DIR}/lib:/usr/local/lib:/app \
+    PYTHONPATH=${PYTHONPATH}:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
+    PATH=${PATH}:${DEEPSTREAM_DIR}/bin
+
+# GStreamer optimizations and debugging
+ENV GST_DEBUG=1 \
+    GST_DEBUG_NO_COLOR=1 \
+    GST_PLUGIN_SCANNER=${DEEPSTREAM_DIR}/lib/gst-plugins/gst-plugin-scanner
+
+# Set display for X11 (for local visualization, override with docker run -e DISPLAY)
+ENV DISPLAY=:0
+
+# CUDA and TensorRT paths
+ENV CUDA_HOME=/usr/local/cuda-12.8 \
+    PATH=${PATH}:/usr/local/cuda-12.8/bin \
+    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-12.8/lib64
+
+# Expose ports
+# 8554-8555: RTSP streaming
+# 9000: Monitoring/API
+# 8080: Web interface (if applicable)
+EXPOSE 8554 8555 9000 8080
+
+# Health check to verify DeepStream, GPU, and GStreamer are available
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD nvidia-smi && \
+        python3 -c "import gi; gi.require_version('Gst', '1.0'); from gi.repository import Gst; Gst.init(None)" && \
+        gst-inspect-1.0 nvstreammux || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command: interactive bash
+CMD ["bash"]
+
+# ==============================================================================
+# Build Instructions:
+# ==============================================================================
+# Build:
+#   docker build -t deepstream-yolo11:latest -f Dockerfile.x86 .
+#   docker build -t deepstream-yolo11:8.0 -f Dockerfile.x86 .
+#
+# Run (Interactive with GUI):
+#   docker run -it --gpus all \
+#     --net=host \
+#     -e DISPLAY=$DISPLAY \
+#     -v /tmp/.X11-unix:/tmp/.X11-unix \
+#     -v $(pwd)/engines:/app/engines \
+#     -v $(pwd)/logs:/app/logs \
+#     deepstream-yolo11:latest
+#
+# Run (Headless):
+#   docker run -d --gpus all \
+#     -p 8554:8554 \
+#     -v $(pwd)/engines:/app/engines \
+#     deepstream-yolo11:latest python3 deepstream_api/main_headless.py
+#
+# Development:
+#   docker run -it --gpus all --net=host \
+#     -v $(pwd):/app \
+#     deepstream-yolo11:latest bash
+# ==============================================================================
