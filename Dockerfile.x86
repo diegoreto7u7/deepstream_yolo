@@ -66,9 +66,9 @@ WORKDIR /workspace
 # Clone DeepStream-Yolo repository (official marcoslucianops implementation)
 RUN git clone --depth 1 https://github.com/marcoslucianops/DeepStream-Yolo.git /workspace/DeepStream-Yolo
 
-# Build custom YOLO library for DeepStream with CUDA 12.8
+# Build custom YOLO library for DeepStream with CUDA 12.2
 WORKDIR /workspace/DeepStream-Yolo
-RUN CUDA_VER=12.8 make -C nvdsinfer_custom_impl_Yolo && \
+RUN CUDA_VER=12.2 make -C nvdsinfer_custom_impl_Yolo && \
     ls -lh /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
 
 # Verify the compiled library exists and is valid
@@ -80,10 +80,10 @@ RUN file /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_cust
 # ==============================================================================
 FROM builder AS python-builder
 
-# Upgrade pip and install Python packages for YOLO11 and model conversion
+# Install Python packages for YOLO11 and model conversion
 # Note: Use --break-system-packages for Ubuntu 24.04 which enforces PEP 668
-RUN pip3 install --no-cache-dir --break-system-packages --upgrade pip setuptools && \
-    pip3 install --no-cache-dir --break-system-packages \
+# Don't upgrade pip/setuptools as they're managed by Debian
+RUN pip3 install --no-cache-dir --break-system-packages \
     # YOLO11 and Ultralytics
     ultralytics>=8.3.0 \
     # ONNX tools for model conversion

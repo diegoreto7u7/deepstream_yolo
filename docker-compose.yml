@@ -14,8 +14,8 @@ services:
       context: .
       dockerfile: Dockerfile.x86
       args:
-        - CUDA_VER=12.8
-        - TENSORRT_VER=10.7.0
+        - CUDA_VER=12.2
+        - TENSORRT_VER=8.6.1
 
     # GPU Configuration - Enable all GPUs
     deploy:
@@ -43,7 +43,7 @@ services:
 
       # DeepStream configuration
       - DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0
-      - CUDA_VER=12.8
+      - CUDA_VER=12.2
 
       # GStreamer configuration
       - GST_DEBUG=${GST_DEBUG:-2}
@@ -154,7 +154,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
       - DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0
-      - CUDA_VER=12.8
+      - CUDA_VER=12.2
       - GST_DEBUG=1
       - PYTHONUNBUFFERED=1
 

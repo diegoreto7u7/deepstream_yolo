@@ -65,8 +65,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            CUDA_VER=12.8
-            TENSORRT_VER=10.7.0
+            CUDA_VER=12.2
+            TENSORRT_VER=8.6.1
 
       - name: Test image - Check components
         run: |
@@ -99,8 +99,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            CUDA_VER=12.8
-            TENSORRT_VER=10.7.0
+            CUDA_VER=12.2
+            TENSORRT_VER=8.6.1
 
       - name: Generate build summary
         if: github.event_name != 'pull_request'
@@ -115,7 +115,8 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** x86_64" >> $GITHUB_STEP_SUMMARY
-          echo "**CUDA:** 12.8" >> $GITHUB_STEP_SUMMARY
+          echo "**CUDA:** 12.2" >> $GITHUB_STEP_SUMMARY
+          echo "**TensorRT:** 8.6.1" >> $GITHUB_STEP_SUMMARY
           echo "**DeepStream:** 8.0.0" >> $GITHUB_STEP_SUMMARY
 
   # Security scan with Trivy
