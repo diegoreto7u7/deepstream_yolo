@@ -43,8 +43,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     curl \
     ca-certificates \
-    # Note: CUDA 12.2 is already included in DeepStream base image
-    # No need to install CUDA toolkit separately
+    # CUDA development tools (needed for compilation)
+    cuda-cudart-dev-12-2 \
+    cuda-nvcc-12-2 \
     # GStreamer development
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
