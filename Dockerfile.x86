@@ -107,6 +107,14 @@ FROM builder AS python-builder
 # Install Python packages for YOLO11 and model conversion
 # Note: Use --break-system-packages for Ubuntu 24.04 which enforces PEP 668
 # Don't upgrade pip/setuptools as they're managed by Debian
+
+# Install PyTorch CPU version first (from PyTorch index)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch>=2.1.0 \
+    torchvision>=0.16.0
+
+# Install other packages from PyPI
 RUN pip3 install --no-cache-dir --break-system-packages \
     # YOLO11 and Ultralytics
     ultralytics>=8.3.0 \
@@ -114,9 +122,6 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     onnx>=1.15.0 \
     onnxslim>=0.1.31 \
     onnxruntime-gpu>=1.17.0 \
-    # PyTorch for model export (CPU version to save space, GPU inference via TensorRT)
-    torch>=2.1.0 --index-url https://download.pytorch.org/whl/cpu \
-    torchvision>=0.16.0 --index-url https://download.pytorch.org/whl/cpu \
     # Computer vision and utilities
     numpy>=1.24.0 \
     opencv-python-headless>=4.9.0 \
