@@ -43,9 +43,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     curl \
     ca-certificates \
-    # CUDA development tools (needed for compilation)
-    cuda-cudart-dev-12-2 \
-    cuda-nvcc-12-2 \
     # GStreamer development
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
@@ -60,6 +57,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# CUDA is already installed in base image - set up paths
+# The -devel base image should have CUDA development tools
+RUN echo "Checking CUDA installation..." && \
+    ls -la /usr/local/ | grep cuda || echo "No cuda in /usr/local/" && \
+    find /usr -name "cuda_runtime_api.h" 2>/dev/null || echo "cuda_runtime_api.h not found" && \
+    if [ ! -d /usr/local/cuda ]; then \
+        if [ -d /usr/local/cuda-12.2 ]; then \
+            ln -sf /usr/local/cuda-12.2 /usr/local/cuda; \
+        elif [ -d /usr/local/cuda-12.4 ]; then \
+            ln -sf /usr/local/cuda-12.4 /usr/local/cuda; \
+        fi; \
+    fi && \
+    echo "CUDA setup complete"
+
+# Set CUDA environment for build stage
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
 # Set working directory for builds
 WORKDIR /workspace
