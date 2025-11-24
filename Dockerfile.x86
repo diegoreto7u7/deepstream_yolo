@@ -1,7 +1,7 @@
 # ==============================================================================
 # Production-Ready Multi-Stage Dockerfile for DeepStream 8.0 + YOLO11x
 # Platform: x86_64 with NVIDIA GPUs (RTX 3090, 3080, TESLA T4, V100, etc.)
-# CUDA: 12.8 | TensorRT: 10.7.0 | DeepStream: 8.0.0
+# CUDA: 12.2 | TensorRT: 8.6.1 | DeepStream: 8.0.0
 # ==============================================================================
 
 # ==============================================================================
@@ -13,15 +13,15 @@ FROM nvcr.io/nvidia/deepstream:8.0-gc-triton-devel AS deepstream-base
 LABEL maintainer="DeepStream YOLO Team"
 LABEL description="DeepStream 8.0 with YOLO11x for x86 NVIDIA GPUs (RTX 3090, 3080, TESLA)"
 LABEL version="2.0"
-LABEL cuda.version="12.8"
-LABEL tensorrt.version="10.7.0"
+LABEL cuda.version="12.2"
+LABEL tensorrt.version="8.6.1"
 LABEL deepstream.version="8.0.0"
 
 # Set environment variables for non-interactive installation
 ENV DEBIAN_FRONTEND=noninteractive \
     DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0 \
-    CUDA_VER=12.8 \
-    TENSORRT_VER=10.7.0 \
+    CUDA_VER=12.2 \
+    TENSORRT_VER=8.6.1 \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
     LANG=C.UTF-8 \
@@ -43,10 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     curl \
     ca-certificates \
-    # CUDA development tools (CUDA 12.8)
-    cuda-toolkit-12-8 \
-    cuda-cudart-dev-12-8 \
-    cuda-nvcc-12-8 \
+    # Note: CUDA 12.2 is already included in DeepStream base image
+    # No need to install CUDA toolkit separately
     # GStreamer development
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
@@ -229,10 +227,10 @@ ENV GST_DEBUG=1 \
 # Set display for X11 (for local visualization, override with docker run -e DISPLAY)
 ENV DISPLAY=:0
 
-# CUDA and TensorRT paths
-ENV CUDA_HOME=/usr/local/cuda-12.8 \
-    PATH=${PATH}:/usr/local/cuda-12.8/bin \
-    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-12.8/lib64
+# CUDA and TensorRT paths (CUDA 12.2 from DeepStream base image)
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=${PATH}:/usr/local/cuda/bin \
+    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/lib64
 
 # Expose ports
 # 8554-8555: RTSP streaming
@@ -279,3 +277,4 @@ CMD ["bash"]
 #     -v $(pwd):/app \
 #     deepstream-yolo11:latest bash
 # ==============================================================================
+  test:

@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ==============================================================================
 # DeepStream 8.0 + YOLO11x Docker Compose Configuration
 # Platform: x86_64 with NVIDIA GPUs
@@ -223,14 +221,12 @@ services:
 # ==============================================================================
 # Volume Configuration (optional named volumes)
 # ==============================================================================
-volumes:
-  # Persistent engine storage (can use named volume instead of bind mount)
-  # engines:
-  #   driver: local
-
-  # Logs storage
-  # logs:
-  #   driver: local
+# Uncomment to use named volumes instead of bind mounts:
+# volumes:
+#   engines:
+#     driver: local
+#   logs:
+#     driver: local
 
 # ==============================================================================
 # Usage Examples:
