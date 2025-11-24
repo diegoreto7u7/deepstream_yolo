@@ -62,13 +62,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The -devel base image should have CUDA development tools
 RUN echo "Checking CUDA installation..." && \
     ls -la /usr/local/ | grep cuda || echo "No cuda in /usr/local/" && \
-    find /usr -name "cuda_runtime_api.h" 2>/dev/null || echo "cuda_runtime_api.h not found" && \
+    find /usr -name "cuda_runtime_api.h" 2>/dev/null | head -1 || echo "cuda_runtime_api.h not found" && \
     if [ ! -d /usr/local/cuda ]; then \
         if [ -d /usr/local/cuda-12.2 ]; then \
             ln -sf /usr/local/cuda-12.2 /usr/local/cuda; \
         elif [ -d /usr/local/cuda-12.4 ]; then \
             ln -sf /usr/local/cuda-12.4 /usr/local/cuda; \
+        elif [ -d /usr/local/cuda-12.8 ]; then \
+            ln -sf /usr/local/cuda-12.8 /usr/local/cuda; \
         fi; \
+    fi && \
+    echo "Creating CUDA version compatibility symlinks..." && \
+    if [ -d /usr/local/cuda-12.8 ] && [ ! -d /usr/local/cuda-12.2 ]; then \
+        ln -sf /usr/local/cuda-12.8 /usr/local/cuda-12.2; \
+        echo "Created symlink: cuda-12.2 -> cuda-12.8"; \
     fi && \
     echo "CUDA setup complete"
 
