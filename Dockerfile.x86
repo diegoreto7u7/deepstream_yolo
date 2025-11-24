@@ -133,11 +133,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-libav \
     gstreamer1.0-rtsp \
     gstreamer1.0-alsa \
-    # OpenCV runtime libraries
-    libopencv-core4.5d \
-    libopencv-imgproc4.5d \
-    libopencv-highgui4.5d \
-    libopencv-videoio4.5d \
+    # Note: OpenCV runtime is already included in DeepStream base image
+    # No need to install libopencv-* packages separately
     # System utilities
     wget \
     curl \
