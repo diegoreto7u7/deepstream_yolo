@@ -81,8 +81,9 @@ RUN file /workspace/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_cust
 FROM builder AS python-builder
 
 # Upgrade pip and install Python packages for YOLO11 and model conversion
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir \
+# Note: Use --break-system-packages for Ubuntu 24.04 which enforces PEP 668
+RUN pip3 install --no-cache-dir --break-system-packages --upgrade pip setuptools && \
+    pip3 install --no-cache-dir --break-system-packages \
     # YOLO11 and Ultralytics
     ultralytics>=8.3.0 \
     # ONNX tools for model conversion
@@ -211,7 +212,7 @@ RUN mkdir -p \
     && chmod -R 755 /app/recordings
 
 # Configure DeepStream environment variables
-ENV GST_PLUGIN_PATH=${GST_PLUGIN_PATH}:${DEEPSTREAM_DIR}/lib/gst-plugins \
+ENV GST_PLUGIN_PATH=${DEEPSTREAM_DIR}/lib/gst-plugins \
     LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEEPSTREAM_DIR}/lib:/usr/local/lib:/app \
     PYTHONPATH=${PYTHONPATH}:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
     PATH=${PATH}:${DEEPSTREAM_DIR}/bin
