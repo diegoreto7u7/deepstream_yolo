@@ -244,7 +244,7 @@ RUN mkdir -p \
 # Configure DeepStream environment variables
 ENV GST_PLUGIN_PATH=${DEEPSTREAM_DIR}/lib/gst-plugins \
     LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEEPSTREAM_DIR}/lib:/usr/local/lib:/app \
-    PYTHONPATH=${PYTHONPATH}:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
+    PYTHONPATH=/usr/local/lib/dist-packages:${PYTHONPATH}:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
     PATH=${PATH}:${DEEPSTREAM_DIR}/bin
 
 # GStreamer optimizations and debugging
