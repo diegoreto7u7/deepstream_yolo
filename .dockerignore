@@ -1,0 +1,253 @@
+# ==============================================================================
+# Docker Ignore File for DeepStream 8.0 + YOLO11x Project
+# Excludes unnecessary files from Docker build context
+# ==============================================================================
+
+# ==============================================================================
+# Git and Version Control
+# ==============================================================================
+.git/
+.gitignore
+.gitattributes
+.github/
+.gitlab-ci.yml
+
+# ==============================================================================
+# TensorRT Engines (GPU-specific, built at runtime)
+# ==============================================================================
+# Engines are GPU-specific and ~400MB each
+# They MUST be built on the target GPU at runtime
+engines/tensorrt/*.engine
+engines/tensorrt/*.trt
+engines/*.engine
+engines/*.trt
+*.engine
+*.trt
+
+# Keep the build scripts
+!engines/*.py
+!engines/*.sh
+!engines/*.txt
+!engines/*.md
+
+# ==============================================================================
+# Model Files (Large, download at runtime if needed)
+# ==============================================================================
+# PyTorch models (220MB each)
+engines/pt/*.pt
+*.pt
+
+# ONNX models (can be included or built at runtime)
+# Uncomment to exclude ONNX files from image (will export from .pt at runtime)
+# engines/onnx/*.onnx
+# *.onnx
+
+# ==============================================================================
+# Python
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so.bak
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+.venv
+
+# ==============================================================================
+# Logs and Output Files
+# ==============================================================================
+logs/*.log
+logs/**/*.log
+*.log
+*.log.*
+output/*.mp4
+output/*.avi
+output/**/*
+recordings/*.mp4
+recordings/*.avi
+recordings/**/*
+
+# Keep directory structure
+!logs/.gitkeep
+!output/.gitkeep
+!recordings/.gitkeep
+
+# ==============================================================================
+# Documentation and Development Files
+# ==============================================================================
+docs/
+*.md
+!README.md
+!DOCKER.md
+*.txt.bak
+*.txt~
+
+# Development and design files
+design/
+sketches/
+notes/
+TODO.txt
+CHANGELOG.md
+
+# ==============================================================================
+# IDE and Editor Files
+# ==============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# ==============================================================================
+# Testing
+# ==============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+pytest.ini
+tests/
+test_*.py
+*_test.py
+
+# ==============================================================================
+# Build Artifacts and Temporary Files
+# ==============================================================================
+*.o
+*.a
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+*.bak
+*.backup
+
+# Compiled libraries (will be built in container)
+# Uncomment if you want to rebuild the .so in container
+# *.so
+
+# ==============================================================================
+# Docker Files
+# ==============================================================================
+docker-compose.override.yml
+.dockerignore
+Dockerfile.backup
+Dockerfile.old
+
+# ==============================================================================
+# System Files
+# ==============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# Large Media Files (for testing)
+# ==============================================================================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+
+# Keep sample videos if needed
+!samples/*.mp4
+!test_data/*.mp4
+
+# ==============================================================================
+# Configuration Overrides (keep templates, exclude local configs)
+# ==============================================================================
+*.local
+.env.local
+.env.*.local
+config.local.yml
+secrets.yml
+credentials.json
+
+# ==============================================================================
+# Monitoring and Profiling
+# ==============================================================================
+*.prof
+*.profile
+.nvprof/
+nsight-reports/
+
+# ==============================================================================
+# CI/CD
+# ==============================================================================
+.travis.yml
+.circleci/
+.jenkins/
+Jenkinsfile
+
+# ==============================================================================
+# Package Manager
+# ==============================================================================
+node_modules/
+package-lock.json
+yarn.lock
+
+# ==============================================================================
+# Database and Cache
+# ==============================================================================
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+cache/
+
+# ==============================================================================
+# Keep Important Files
+# ==============================================================================
+# Explicitly include these files even if matched by patterns above
+!configs/**
+!deepstream_api/**
+!engines/auto_build_engine.py
+!engines/build_test_engine.py
+!engines/test_deepstream_engine.py
+!libnvdsinfer_custom_impl_Yolo.so
+!setup_deepstream_env.sh
+!entrypoint.sh
+!build.sh
+!requirements.txt
+
+# ==============================================================================
+# Notes:
+# ==============================================================================
+# - TensorRT engines are GPU-specific and must be built at runtime
+# - Model files (.pt) can be downloaded at runtime to reduce image size
+# - Logs and output should be mounted as volumes
+# - The .dockerignore reduces build context and image size significantly
+# ==============================================================================

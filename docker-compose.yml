@@ -1,0 +1,266 @@
+# ==============================================================================
+# DeepStream 8.0 + YOLO11x Docker Compose Configuration
+# Platform: x86_64 with NVIDIA GPUs
+# ==============================================================================
+
+services:
+  # ==============================================================================
+  # Main DeepStream Application Service
+  # ==============================================================================
+  deepstream-app:
+    image: deepstream-yolo11:latest
+    container_name: deepstream-yolo11-app
+    build:
+      context: .
+      dockerfile: Dockerfile.x86
+      args:
+        - CUDA_VER=12.2
+        - TENSORRT_VER=8.6.1
+
+    # GPU Configuration - Enable all GPUs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility, video]
+
+    # Runtime configuration
+    runtime: nvidia
+
+    # Network configuration
+    network_mode: host
+
+    # Environment variables
+    environment:
+      # Display for X11 GUI (use host DISPLAY)
+      - DISPLAY=${DISPLAY:-:0}
+
+      # NVIDIA/CUDA settings
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+      # DeepStream configuration
+      - DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0
+      - CUDA_VER=12.2
+
+      # GStreamer configuration
+      - GST_DEBUG=${GST_DEBUG:-2}
+      - GST_DEBUG_NO_COLOR=1
+
+      # Application settings
+      - PYTHONUNBUFFERED=1
+      - TZ=${TZ:-Europe/Madrid}
+      - API_URL=${API_URL:-http://localhost/api}
+
+      # GPU selection (override to use specific GPU, e.g., "0" or "0,1")
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-all}
+
+    # Volume mounts for persistence and configuration
+    volumes:
+      # TensorRT engines (GPU-specific, persistent)
+      - ./engines:/app/engines
+
+      # Configuration files
+      - ./configs:/app/configs
+
+      # Logs and output
+      - ./logs:/app/logs
+      - ./output:/app/output
+
+      # Recordings (if using recorder)
+      - ./recordings:/app/recordings
+
+      # X11 socket for GUI support
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+      # Model files (optional, if stored separately)
+      # - ./models:/app/models
+
+      # Development: Mount source code (comment out for production)
+      # - ./deepstream_api:/app/deepstream_api
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "nvidia-smi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Security options
+    # NOTE: For RedHat/Rocky/CentOS with SELinux, add this line:
+    # - label:type:container_runtime_t
+    security_opt:
+      - seccomp:unconfined
+      # Uncomment the following line on RedHat/Rocky/CentOS for X11 display access:
+      # - label:type:container_runtime_t
+
+    # IPC settings (required for shared memory with X11)
+    ipc: host
+
+    # Device access (for cameras, if using USB/local devices)
+    # devices:
+    #   - /dev/video0:/dev/video0
+    #   - /dev/video1:/dev/video1
+
+    # Default command (override with docker-compose run)
+    command: bash
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+  # ==============================================================================
+  # Development Service (with source code mounted)
+  # ==============================================================================
+  deepstream-dev:
+    extends: deepstream-app
+    container_name: deepstream-yolo11-dev
+    profiles:
+      - development
+      - dev
+
+    volumes:
+      # Mount all source code for development
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    command: bash
+
+  # ==============================================================================
+  # Headless Service (no GUI, production mode)
+  # ==============================================================================
+  deepstream-headless:
+    extends: deepstream-app
+    container_name: deepstream-yolo11-headless
+    profiles:
+      - production
+      - headless
+
+    # Remove X11 volumes and display
+    volumes:
+      - ./engines:/app/engines
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - ./recordings:/app/recordings
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      - DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0
+      - CUDA_VER=12.2
+      - GST_DEBUG=1
+      - PYTHONUNBUFFERED=1
+
+    # Run headless application
+    command: python3 deepstream_api/main_headless.py
+
+    # Port mappings (only expose necessary ports)
+    ports:
+      - "8554:8554"  # RTSP stream
+      - "8555:8555"  # Secondary RTSP
+      - "9000:9000"  # Monitoring/API
+
+    # Restart always for production
+    restart: always
+
+    # Remove interactive options
+    stdin_open: false
+    tty: false
+
+  # ==============================================================================
+  # Low Latency Service (optimized for real-time processing)
+  # ==============================================================================
+  deepstream-lowlatency:
+    extends: deepstream-app
+    container_name: deepstream-yolo11-lowlatency
+    profiles:
+      - lowlatency
+      - performance
+
+    # Run low latency mode
+    command: python3 deepstream_api/main_low_latency.py
+
+    # CPU pinning and real-time priority (requires host capabilities)
+    # privileged: true
+
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Optional: RTSP Server (if using separate RTSP streaming service)
+  # ==============================================================================
+  # rtsp-server:
+  #   image: ullaakut/rtsp-simple-server:latest
+  #   container_name: rtsp-simple-server
+  #   profiles:
+  #     - rtsp
+  #   ports:
+  #     - "8554:8554"
+  #     - "1935:1935"
+  #     - "8888:8888"
+  #   volumes:
+  #     - ./rtsp-config.yml:/rtsp-simple-server.yml
+  #   restart: unless-stopped
+
+# ==============================================================================
+# Network Configuration (optional custom network)
+# ==============================================================================
+# networks:
+#   deepstream-net:
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 172.28.0.0/16
+
+# ==============================================================================
+# Volume Configuration (optional named volumes)
+# ==============================================================================
+# Uncomment to use named volumes instead of bind mounts:
+# volumes:
+#   engines:
+#     driver: local
+#   logs:
+#     driver: local
+
+# ==============================================================================
+# Usage Examples:
+# ==============================================================================
+#
+# 1. Start default service (interactive with GUI):
+#    docker-compose up deepstream-app
+#
+# 2. Start development environment:
+#    docker-compose --profile dev up deepstream-dev
+#
+# 3. Start headless production service:
+#    docker-compose --profile production up -d deepstream-headless
+#
+# 4. Start low latency service:
+#    docker-compose --profile lowlatency up deepstream-lowlatency
+#
+# 5. Build and start:
+#    docker-compose build && docker-compose up
+#
+# 6. Run specific command:
+#    docker-compose run deepstream-app python3 engines/auto_build_engine.py
+#
+# 7. View logs:
+#    docker-compose logs -f deepstream-app
+#
+# 8. Stop all services:
+#    docker-compose down
+#
+# 9. Stop and remove volumes:
+#    docker-compose down -v
+#
+# 10. Use specific GPU (set before running):
+#     export CUDA_VISIBLE_DEVICES=0
+#     docker-compose up deepstream-app
+#
+# ==============================================================================
