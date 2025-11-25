@@ -99,8 +99,8 @@ class ThreadedDeepStreamCamera:
             # Establecer nombre del thread para debugging
             threading.current_thread().name = f"Camera-{self.camera_id}"
 
-            # Inicializar GStreamer en este thread
-            Gst.init(None)
+            # NOTA: Gst.init() debe llamarse UNA SOLA VEZ en el main thread
+            # No llamar Gst.init(None) aquí - ya se inicializó en main
 
             # Crear contexto GLib thread-local
             # Esto asegura que GLib.MainLoop no interfiera con otros threads
