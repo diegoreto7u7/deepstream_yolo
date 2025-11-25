@@ -163,70 +163,69 @@ class YOLOExporter:
         try:
             from ultralytics import YOLO
             from pathlib import Path
+            import shutil
+            import glob
 
             if output_dir is None:
                 output_dir = "/app/engines/pt"
 
             Path(output_dir).mkdir(parents=True, exist_ok=True)
+            dst_path = f"{output_dir}/yolo11x.pt"
 
             print(f"\n📂 Directorio de destino: {output_dir}")
-            print("⏳ Descargando modelo (5-10 minutos)...")
-            print("   Tamaño: ~219 MB\n")
+            print("⏳ Descargando modelo (1-5 minutos)...")
+            print("   Tamaño: ~109 MB\n")
 
-            # Descargar modelo automáticamente
-            model = YOLO('yolo11x.pt')
+            # Guardar directorio actual
+            original_cwd = os.getcwd()
 
-            # El modelo se descarga a ~/.cache de ultralytics
-            # Localizamos el archivo descargado
-            import glob
-            pt_paths = glob.glob(f"{Path.home()}/.cache/ultralytics/**/yolo11x.pt", recursive=True)
+            # Cambiar al directorio destino para que ultralytics descargue ahí
+            os.chdir(output_dir)
 
-            if pt_paths:
-                src_path = pt_paths[0]
-                dst_path = f"{output_dir}/yolo11x.pt"
+            try:
+                # Descargar modelo automáticamente (se descarga en el directorio actual)
+                model = YOLO('yolo11x.pt')
 
-                # Copiar a directorio de destino
-                import shutil
-                shutil.copy2(src_path, dst_path)
+                # Verificar si se descargó en el directorio actual
+                if os.path.exists('yolo11x.pt'):
+                    print(f"✅ Modelo descargado directamente en: {dst_path}")
+                else:
+                    # Buscar en ubicaciones alternativas
+                    search_paths = [
+                        str(Path.home() / '.cache' / 'ultralytics' / '**' / 'yolo11x.pt'),
+                        str(Path.home() / 'yolo11x.pt'),
+                        '/tmp/yolo11x.pt',
+                        '/app/yolo11x.pt',
+                    ]
 
+                    found_path = None
+                    for pattern in search_paths:
+                        matches = glob.glob(pattern, recursive=True)
+                        if matches:
+                            found_path = matches[0]
+                            break
+
+                    if found_path and found_path != dst_path:
+                        shutil.copy2(found_path, dst_path)
+                        print(f"✅ Modelo copiado desde: {found_path}")
+                    elif not os.path.exists(dst_path):
+                        raise FileNotFoundError("No se pudo localizar el modelo descargado")
+
+            finally:
+                # Restaurar directorio original
+                os.chdir(original_cwd)
+
+            # Verificar que el archivo existe y tiene tamaño válido
+            if os.path.exists(dst_path):
                 size_mb = os.path.getsize(dst_path) / (1024**2)
-                print(f"✅ Modelo descargado: {dst_path}")
-                print(f"📊 Tamaño: {size_mb:.2f} MB\n")
-
-                return dst_path
+                if size_mb > 50:  # El modelo debe ser > 50MB
+                    print(f"✅ Modelo listo: {dst_path}")
+                    print(f"📊 Tamaño: {size_mb:.2f} MB\n")
+                    return dst_path
+                else:
+                    raise ValueError(f"Archivo descargado muy pequeño: {size_mb:.2f} MB")
             else:
-                # El modelo fue descargado por ultralytics, ubicarlo
-                # Buscar en el directorio del usuario cache
-                home = str(Path.home())
-                cache_dir = Path(home) / '.cache' / 'torch' / 'hub' / 'ultralytics_yolov5_master'
-
-                # Intentar encontrar el modelo en diferentes ubicaciones
-                potential_paths = [
-                    Path(home) / '.cache' / 'ultralytics' / 'yolo11x.pt',
-                    Path(home) / '.cache' / 'ultralytics' / 'assets' / 'yolo11x.pt',
-                    Path(home) / 'yolo11x.pt',
-                ]
-
-                pt_file = None
-                for potential_path in potential_paths:
-                    if potential_path.exists():
-                        pt_file = str(potential_path)
-                        break
-
-                if not pt_file:
-                    # Usar el archivo del modelo en el directorio temporal
-                    raise FileNotFoundError(f"No se pudo encontrar el modelo descargado")
-
-                # Copiar a directorio de destino
-                import shutil
-                dst_path = f"{output_dir}/yolo11x.pt"
-                shutil.copy2(pt_file, dst_path)
-
-                size_mb = os.path.getsize(dst_path) / (1024**2)
-                print(f"✅ Modelo localizado y copiado: {dst_path}")
-                print(f"📊 Tamaño: {size_mb:.2f} MB\n")
-
-                return dst_path
+                raise FileNotFoundError(f"No se encontró el modelo en: {dst_path}")
 
         except Exception as e:
             print(f"\n❌ Error descargando modelo: {e}")
@@ -464,6 +463,7 @@ Ejemplos:
             if not onnx_path:
                 # Buscar yolo11x.pt por defecto
                 pt_paths = [
+                    '/app/engines/pt/yolo11x.pt',
                     'yolo11x.pt',
                     'export_dynamic_batch/yolo11x.pt',
                     '/app/export_dynamic_batch/yolo11x.pt'
