@@ -167,7 +167,7 @@ RUN git clone --depth 1 https://github.com/NVIDIA-AI-IOT/deepstream_python_apps.
 # Initialize submodules and build pyds
 WORKDIR /opt/nvidia/deepstream/deepstream-8.0/sources/deepstream_python_apps/bindings
 RUN git submodule update --init && \
-    pip3 wheel . --no-deps -w /tmp/pyds_wheel --break-system-packages
+    pip3 wheel . --no-deps -w /tmp/pyds_wheel
 
 # ==============================================================================
 # Stage 5: Runtime Stage - Final production image
