@@ -239,10 +239,11 @@ COPY --from=builder /workspace/DeepStream-Yolo/config_infer_primary*.txt \
     /opt/nvidia/deepstream/deepstream-8.0/
 
 # Copy and install pyds wheel from pyds-builder stage
+# Note: pyds import verification requires GPU (libcuda), done at runtime in entrypoint.sh
 COPY --from=pyds-builder /tmp/pyds_wheel/*.whl /tmp/
 RUN pip3 install --no-cache-dir --break-system-packages /tmp/*.whl && \
     rm -f /tmp/*.whl && \
-    python3 -c "import pyds; print(f'✓ PyDS: {pyds.__version__}')"
+    echo "PyDS wheel installed (verification at runtime)"
 
 # Set up application directory
 WORKDIR /app
