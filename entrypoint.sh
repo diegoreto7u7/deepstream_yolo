@@ -80,6 +80,10 @@ python3 -c "import tensorrt as trt; print(f'   Versión: {trt.__version__}')" 2>
 echo "🟢 DeepStream:"
 cat /opt/nvidia/deepstream/deepstream-8.0/version 2>/dev/null || echo "   ❌ DeepStream no detectado"
 
+# Verificar PyDS
+echo "🐍 PyDS:"
+python3 -c "import pyds; print(f'   Version: {pyds.__version__}')" 2>/dev/null || echo "   ❌ PyDS no disponible"
+
 # Verificar Engine
 echo "📦 Engine TensorRT:"
 if [ -f "$ENGINE_FILE" ]; then
@@ -99,14 +103,15 @@ echo ""
 if [ $# -eq 0 ]; then
     echo "📋 Comandos disponibles:"
     echo ""
-    echo "  python3 main_low_latency.py          - Iniciar con baja latencia"
-    echo "  python3 main.py                      - Iniciar normal"
-    echo "  python3 main_headless.py             - Iniciar sin interfaz gráfica"
+    echo "  cd deepstream_api && python3 main_pyds.py  - Multi-camara con PyDS (RECOMENDADO)"
+    echo "  python3 main_low_latency.py                - Iniciar con baja latencia"
+    echo "  python3 main.py                            - Iniciar normal"
+    echo "  python3 main_headless.py                   - Iniciar sin interfaz grafica"
     echo ""
-    echo "  bash                                  - Abrir terminal"
+    echo "  bash                                        - Abrir terminal"
     echo ""
     echo "Ejemplo de uso:"
-    echo "  docker run -it deepstream-app python3 main_low_latency.py"
+    echo "  docker run -it deepstream-app bash -c 'cd deepstream_api && python3 main_pyds.py'"
     echo ""
     exec bash
 else
