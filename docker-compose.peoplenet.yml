@@ -1,0 +1,115 @@
+# ==============================================================================
+# Docker Compose - Sistema de Control de Aforo
+# DeepStream 8.0 + PeopleNet
+# ==============================================================================
+
+services:
+  aforo:
+    build:
+      context: .
+      dockerfile: Dockerfile.peoplenet
+    image: deepstream-peoplenet:latest
+    container_name: aforo-peoplenet
+
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Network: host mode for RTSP access
+    network_mode: host
+
+    # Environment
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - API_URL=http://172.80.20.22/api
+      - HEADLESS=false
+
+    # Volumes
+    volumes:
+      # X11 for display
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Persist logs
+      - ./logs:/app/logs
+      # Persist TensorRT engine (avoid recompilation)
+      - ./models:/app/models
+      # Config overrides (optional)
+      - ./configs/peoplenet:/app/configs/peoplenet:ro
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "nvidia-smi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Headless mode (no display)
+  aforo-headless:
+    build:
+      context: .
+      dockerfile: Dockerfile.peoplenet
+    image: deepstream-peoplenet:latest
+    container_name: aforo-headless
+    profiles:
+      - headless
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    network_mode: host
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - API_URL=http://172.80.20.22/api
+      - HEADLESS=true
+
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+
+    command: ["python3", "/app/deepstream_api/main_peoplenet.py", "--headless"]
+
+    restart: unless-stopped
+
+# ==============================================================================
+# Uso:
+# ==============================================================================
+# Build:
+#   docker compose -f docker-compose.peoplenet.yml build
+#
+# Run con display:
+#   xhost +local:docker
+#   docker compose -f docker-compose.peoplenet.yml up aforo
+#
+# Run headless:
+#   docker compose -f docker-compose.peoplenet.yml --profile headless up aforo-headless
+#
+# Stop:
+#   docker compose -f docker-compose.peoplenet.yml down
+#
+# Logs:
+#   docker compose -f docker-compose.peoplenet.yml logs -f aforo
+# ==============================================================================

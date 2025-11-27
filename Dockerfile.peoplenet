@@ -1,0 +1,146 @@
+# ==============================================================================
+# DeepStream 8.0 + PeopleNet - Sistema de Control de Aforo
+# ==============================================================================
+# Platform: x86_64 con GPUs NVIDIA (RTX 3090, 3080, TESLA T4, V100, etc.)
+#
+# Ventajas de PeopleNet sobre YOLO:
+#   - Modelo pre-optimizado por NVIDIA para deteccion de personas
+#   - No requiere compilacion de librerias custom
+#   - nvdsanalytics hace el line crossing automaticamente
+#   - Menor complejidad, mayor estabilidad
+# ==============================================================================
+
+FROM nvcr.io/nvidia/deepstream:8.0-gc-triton-devel AS deepstream-base
+
+LABEL maintainer="Garunia Team"
+LABEL description="Sistema de Control de Aforo con DeepStream 8.0 + PeopleNet"
+LABEL version="1.0"
+LABEL deepstream.version="8.0.0"
+LABEL model="PeopleNet v2.6"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# ==============================================================================
+# Stage 1: Compilar PyDS (Python bindings para DeepStream)
+# ==============================================================================
+FROM deepstream-base AS pyds-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git python3-dev python3-pip cmake build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir --break-system-packages \
+    build wheel setuptools cmake pybind11
+
+RUN git clone --depth 1 https://github.com/NVIDIA-AI-IOT/deepstream_python_apps.git \
+    /opt/nvidia/deepstream/deepstream-8.0/sources/deepstream_python_apps
+
+WORKDIR /opt/nvidia/deepstream/deepstream-8.0/sources/deepstream_python_apps/bindings
+RUN git submodule update --init && \
+    pip3 wheel . --no-deps -w /tmp/pyds_wheel
+
+# ==============================================================================
+# Stage 2: Imagen de produccion
+# ==============================================================================
+FROM deepstream-base AS runtime
+
+# Dependencias runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-gi \
+    python3-gi-cairo \
+    gir1.2-gst-rtsp-server-1.0 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-rtsp \
+    wget curl git vim nano htop \
+    net-tools iputils-ping \
+    libx11-6 libxext6 libxrender1 \
+    x11-apps x11-utils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Paquetes Python (minimos - no necesitamos YOLO/ultralytics)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    numpy>=1.24.0 \
+    opencv-python-headless>=4.9.0 \
+    requests>=2.31.0 \
+    pyyaml>=6.0 \
+    PyGObject>=3.42.0
+
+# Instalar PyDS
+COPY --from=pyds-builder /tmp/pyds_wheel/*.whl /tmp/
+RUN pip3 install --no-cache-dir --break-system-packages /tmp/*.whl && \
+    rm -f /tmp/*.whl
+
+# Crear estructura de directorios
+WORKDIR /app
+RUN mkdir -p \
+    /app/models/peoplenet \
+    /app/configs/peoplenet \
+    /app/logs \
+    /app/output
+
+# Descargar modelo PeopleNet desde NGC
+# PeopleNet v2.6.3 - INT8 optimizado
+WORKDIR /app/models/peoplenet
+RUN wget -q --show-progress --content-disposition \
+    'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/peoplenet/pruned_quantized_decrypted_v2.6.3/files?redirect=true&path=resnet34_peoplenet_int8.onnx' \
+    -O resnet34_peoplenet_int8.onnx 2>/dev/null || \
+    echo "WARN: No se pudo descargar PeopleNet. Se descargara en runtime."
+
+# Labels para PeopleNet (person=0, bag=1, face=2)
+RUN echo -e "person\nbag\nface" > /app/models/peoplenet/labels.txt
+
+# Copiar aplicacion
+WORKDIR /app
+COPY configs/peoplenet/ /app/configs/peoplenet/
+COPY deepstream_api/ /app/deepstream_api/
+COPY entrypoint_peoplenet.sh /app/entrypoint.sh
+
+# Permisos
+RUN chmod +x /app/entrypoint.sh && \
+    chmod +x /app/deepstream_api/*.py 2>/dev/null || true
+
+# Variables de entorno
+ENV GST_PLUGIN_PATH=${DEEPSTREAM_DIR}/lib/gst-plugins \
+    LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEEPSTREAM_DIR}/lib:/usr/local/lib \
+    PYTHONPATH=/usr/local/lib/dist-packages:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
+    PATH=${PATH}:${DEEPSTREAM_DIR}/bin \
+    GST_DEBUG=2 \
+    DISPLAY=:0
+
+# Puertos: RTSP streaming, API
+EXPOSE 8554 8555 9000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD nvidia-smi && gst-inspect-1.0 nvstreammux || exit 1
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["python3", "/app/deepstream_api/main_peoplenet.py"]
+
+# ==============================================================================
+# Uso:
+# ==============================================================================
+# Build:
+#   docker build -f Dockerfile.peoplenet -t deepstream-peoplenet:latest .
+#
+# Run interactivo:
+#   docker run --gpus all -it --rm --net=host \
+#     -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+#     deepstream-peoplenet:latest bash
+#
+# Run aplicacion:
+#   docker run --gpus all -d --net=host \
+#     -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+#     --name aforo deepstream-peoplenet:latest
+# ==============================================================================

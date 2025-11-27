@@ -1,0 +1,87 @@
+# NvDsAnalytics Configuration for Line Crossing Detection
+# This plugin automatically counts people crossing virtual lines
+#
+# IMPORTANT: Coordinates are relative to config-width x config-height
+# Format: line-crossing-LABEL=x1;y1;x2;y2;x3;y3;x4;y4
+# The line is from (x1,y1) to (x2,y2)
+# The direction vector is from (x3,y3) to (x4,y4) - determines entry direction
+
+[property]
+enable=1
+config-width=1920
+config-height=1080
+osd-mode=2
+display-font-size=12
+
+# ============================================================================
+# LINE CROSSING CONFIGURATION FOR STREAM 0 (Camera 1)
+# ============================================================================
+[line-crossing-stream-0]
+enable=1
+# Entry line - people crossing from left to right = ENTRY
+line-crossing-Entry=500;500;500;800;400;650;600;650
+# Exit line - same line but opposite direction = EXIT
+line-crossing-Exit=500;500;500;800;600;650;400;650
+class-id=0
+extended=0
+# mode: loose, balanced, strict
+mode=balanced
+
+# ============================================================================
+# LINE CROSSING CONFIGURATION FOR STREAM 1 (Camera 2)
+# ============================================================================
+[line-crossing-stream-1]
+enable=1
+line-crossing-Entry=900;400;900;700;800;550;1000;550
+line-crossing-Exit=900;400;900;700;1000;550;800;550
+class-id=0
+extended=0
+mode=balanced
+
+# ============================================================================
+# LINE CROSSING CONFIGURATION FOR STREAM 2 (Camera 3) - if needed
+# ============================================================================
+[line-crossing-stream-2]
+enable=0
+line-crossing-Entry=960;300;960;700;860;500;1060;500
+line-crossing-Exit=960;300;960;700;1060;500;860;500
+class-id=0
+extended=0
+mode=balanced
+
+# ============================================================================
+# LINE CROSSING CONFIGURATION FOR STREAM 3 (Camera 4) - if needed
+# ============================================================================
+[line-crossing-stream-3]
+enable=0
+line-crossing-Entry=960;300;960;700;860;500;1060;500
+line-crossing-Exit=960;300;960;700;1060;500;860;500
+class-id=0
+extended=0
+mode=balanced
+
+# ============================================================================
+# ROI FILTERING (Optional - restrict detection to specific areas)
+# ============================================================================
+# [roi-filtering-stream-0]
+# enable=0
+# roi-RF=0;0;1920;0;1920;1080;0;1080
+# inverse-roi=0
+# class-id=-1
+
+# ============================================================================
+# OVERCROWDING DETECTION (Optional)
+# ============================================================================
+# [overcrowding-stream-0]
+# enable=0
+# roi-OC=0;0;1920;0;1920;1080;0;1080
+# object-threshold=10
+# class-id=-1
+
+# ============================================================================
+# DIRECTION DETECTION (Optional - detect movement direction)
+# ============================================================================
+# [direction-detection-stream-0]
+# enable=0
+# direction-South=960;0;960;1080
+# class-id=-1
