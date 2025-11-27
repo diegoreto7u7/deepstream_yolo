@@ -19,10 +19,10 @@ labelfile-path=/app/models/peoplenet/labels.txt
 
 # Configuracion de entrada
 batch-size=4
-# Formato: channels;height;width;format (0=CHW)
-input-dims=3;544;960;0
 process-mode=1
 model-color-format=0
+# PeopleNet native input: 960x544 (W x H)
+infer-dims=3;544;960
 
 # Modo de red: 0=FP32, 1=INT8, 2=FP16
 # INT8 es mas rapido pero requiere calibracion (ya incluida en el modelo)
