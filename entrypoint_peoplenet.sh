@@ -34,20 +34,14 @@ fi
 
 # Verificar modelo PeopleNet
 echo "[3/4] Verificando modelo PeopleNet..."
-MODEL_PATH="/app/models/peoplenet/resnet34_peoplenet_int8.onnx"
+MODEL_PATH="/app/models/peoplenet/resnet34_peoplenet.onnx"
 if [ -f "$MODEL_PATH" ]; then
     MODEL_SIZE=$(du -h "$MODEL_PATH" | cut -f1)
     echo "  Modelo: $MODEL_PATH ($MODEL_SIZE)"
 else
-    echo "  Modelo no encontrado, descargando..."
-    cd /app/models/peoplenet
-    wget -q --show-progress \
-        'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/peoplenet/pruned_quantized_decrypted_v2.6.3/files?redirect=true&path=resnet34_peoplenet_int8.onnx' \
-        -O resnet34_peoplenet_int8.onnx 2>/dev/null || {
-        echo "  ERROR: No se pudo descargar el modelo"
-        exit 1
-    }
-    echo "  Modelo descargado"
+    echo "  ERROR: Modelo no encontrado en $MODEL_PATH"
+    echo "  Descarga manualmente desde NGC: nvidia/tao/peoplenet:deployable_quantized_onnx_v2.6.3"
+    exit 1
 fi
 
 # Verificar GStreamer
