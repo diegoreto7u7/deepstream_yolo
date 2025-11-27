@@ -334,7 +334,7 @@ def main():
         tracker.set_property("tracker-width", 640)
         tracker.set_property("tracker-height", 384)
         tracker.set_property("gpu-id", 0)
-        tracker.set_property("enable-batch-process", 1)
+        # Note: enable-batch-process removed in DeepStream 8.0
 
         # 8. Analytics (line crossing automatico!)
         print("Configurando nvdsanalytics...")
