@@ -39,9 +39,8 @@ maintain-aspect-ratio=0
 # Capas de salida de PeopleNet
 output-blob-names=output_bbox/BiasAdd;output_cov/Sigmoid
 
-# Parser para bounding boxes
-parse-bbox-func-name=NvDsInferParseCustomResnet
-custom-lib-path=/opt/nvidia/deepstream/deepstream-8.0/lib/libnvds_infercustomparser.so
+# Parser para bounding boxes - usar el parser nativo de DeepStream
+output-tensor-meta=0
 
 # ==============================================================================
 # Configuracion por clase
