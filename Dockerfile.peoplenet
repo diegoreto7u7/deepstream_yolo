@@ -3,20 +3,15 @@
 # ==============================================================================
 # Platform: x86_64 con GPUs NVIDIA (RTX 3090, 3080, TESLA T4, V100, etc.)
 #
-# Ventajas de PeopleNet sobre YOLO:
-#   - Modelo pre-optimizado por NVIDIA para deteccion de personas
-#   - No requiere compilacion de librerias custom
-#   - nvdsanalytics hace el line crossing automaticamente
-#   - Menor complejidad, mayor estabilidad
+# Build: docker build -f Dockerfile.peoplenet -t deepstream-peoplenet:latest .
+# Run:   docker compose -f docker-compose.peoplenet.yml up -d
 # ==============================================================================
 
 FROM nvcr.io/nvidia/deepstream:8.0-gc-triton-devel AS deepstream-base
 
 LABEL maintainer="Garunia Team"
 LABEL description="Sistema de Control de Aforo con DeepStream 8.0 + PeopleNet"
-LABEL version="1.0"
-LABEL deepstream.version="8.0.0"
-LABEL model="PeopleNet v2.6"
+LABEL version="2.0"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream-8.0 \
@@ -49,7 +44,7 @@ RUN git submodule update --init && \
 # ==============================================================================
 FROM deepstream-base AS runtime
 
-# Dependencias runtime
+# Dependencias runtime (sin X11 para headless)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -61,14 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-rtsp \
-    wget curl git vim nano htop \
-    net-tools iputils-ping \
-    libx11-6 libxext6 libxrender1 \
-    x11-apps x11-utils \
+    wget curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Paquetes Python (minimos - no necesitamos YOLO/ultralytics)
+# Paquetes Python
 RUN pip3 install --no-cache-dir --break-system-packages \
     numpy>=1.24.0 \
     opencv-python-headless>=4.9.0 \
@@ -86,61 +78,37 @@ WORKDIR /app
 RUN mkdir -p \
     /app/models/peoplenet \
     /app/configs/peoplenet \
-    /app/logs \
-    /app/output
-
-# Descargar modelo PeopleNet desde NGC
-# PeopleNet v2.6.3 - INT8 optimizado
-WORKDIR /app/models/peoplenet
-RUN wget -q --show-progress --content-disposition \
-    'https://api.ngc.nvidia.com/v2/models/org/nvidia/team/tao/peoplenet/pruned_quantized_decrypted_v2.6.3/files?redirect=true&path=resnet34_peoplenet_int8.onnx' \
-    -O resnet34_peoplenet_int8.onnx 2>/dev/null || \
-    echo "WARN: No se pudo descargar PeopleNet. Se descargara en runtime."
+    /app/logs
 
 # Labels para PeopleNet (person=0, bag=1, face=2)
 RUN echo -e "person\nbag\nface" > /app/models/peoplenet/labels.txt
 
 # Copiar aplicacion
-WORKDIR /app
 COPY configs/peoplenet/ /app/configs/peoplenet/
 COPY deepstream_api/ /app/deepstream_api/
-COPY entrypoint_peoplenet.sh /app/entrypoint.sh
 
-# Permisos
-RUN chmod +x /app/entrypoint.sh && \
-    chmod +x /app/deepstream_api/*.py 2>/dev/null || true
-
-# Variables de entorno
+# Variables de entorno (headless por defecto)
 ENV GST_PLUGIN_PATH=${DEEPSTREAM_DIR}/lib/gst-plugins \
     LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEEPSTREAM_DIR}/lib:/usr/local/lib \
     PYTHONPATH=/usr/local/lib/dist-packages:${DEEPSTREAM_DIR}/lib:/app:/app/deepstream_api \
     PATH=${PATH}:${DEEPSTREAM_DIR}/bin \
-    GST_DEBUG=2 \
-    DISPLAY=:0
-
-# Puertos: RTSP streaming, API
-EXPOSE 8554 8555 9000
+    GST_DEBUG=1 \
+    HEADLESS=true \
+    API_URL=http://172.80.20.22/api
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD nvidia-smi && gst-inspect-1.0 nvstreammux || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD nvidia-smi && python3 -c "import pyds" || exit 1
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["python3", "/app/deepstream_api/main_peoplenet.py"]
+WORKDIR /app/deepstream_api
+CMD ["python3", "main_peoplenet.py"]
 
 # ==============================================================================
-# Uso:
-# ==============================================================================
-# Build:
-#   docker build -f Dockerfile.peoplenet -t deepstream-peoplenet:latest .
+# IMPORTANTE: El modelo PeopleNet debe montarse como volumen
 #
-# Run interactivo:
-#   docker run --gpus all -it --rm --net=host \
-#     -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
-#     deepstream-peoplenet:latest bash
+# El usuario debe descargar el modelo desde NGC:
+#   ngc registry model download-version nvidia/tao/peoplenet:deployable_quantized_onnx_v2.6.3
 #
-# Run aplicacion:
-#   docker run --gpus all -d --net=host \
-#     -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
-#     --name aforo deepstream-peoplenet:latest
+# Y montar el directorio:
+#   -v ./models/peoplenet:/app/models/peoplenet
 # ==============================================================================

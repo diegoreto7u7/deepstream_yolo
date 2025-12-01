@@ -1,165 +1,133 @@
-# DeepStream 8.0 + YOLO11x - Docker Setup
+# DeepStream 8.0 + PeopleNet - Sistema de Control de Aforo
 
-Complete Docker containerization for DeepStream 8.0 with YOLO11x object detection on x86 platforms (RTX 3090/3080, TESLA T4/V100).
+Sistema de conteo de ocupacion con DeepStream 8.0 y PeopleNet. Obtiene camaras desde API Laravel y procesa streams RTSP para contar Entry/Exit.
 
-## 🚀 Quick Start
+## Requisitos
 
-```bash
-# 1. Build Docker image
-./scripts/docker-build.sh
+- **GPU**: NVIDIA con soporte CUDA (RTX 3090/3080, TESLA T4/V100)
+- **Drivers**: NVIDIA >= 525
+- **Docker**: Docker Engine + nvidia-container-toolkit
+- **API**: Endpoint Laravel que retorna lista de camaras RTSP
 
-# 2. Run container
-./scripts/docker-run.sh
+## Instalacion
 
-# 3. Inside container - build TensorRT engine (first time only)
-python3 engines/auto_build_engine.py
-
-# 4. Run DeepStream application
-python3 deepstream_api/main_low_latency.py
-```
-
-## 📋 System Requirements
-
-- **Platform**: x86_64 (Intel/AMD)
-- **GPU**: NVIDIA RTX 3090/3080, TESLA T4/V100/A100
-- **Host OS**: Ubuntu 20.04+, Debian 11+, RHEL 8+, Rocky Linux 8+
-- **Requirements on Host**:
-  - NVIDIA GPU Drivers ≥ 525.60.13
-  - Docker Engine ≥ 19.03
-  - nvidia-container-toolkit
-
-## 🔧 Fresh System Setup
-
-If you're setting up on a **fresh system without NVIDIA/CUDA libraries**:
+### 1. Clonar repositorio
 
 ```bash
-# Install prerequisites automatically
-sudo ./scripts/install-nvidia-prerequisites.sh
-
-# Reboot (if drivers were installed)
-sudo reboot
-
-# Build and run
-./scripts/docker-build.sh
-./scripts/docker-run.sh
+git clone <repo-url>
+cd deepstream-peoplenet
 ```
 
-## 📚 Documentation
+### 2. Descargar modelo PeopleNet
 
-| Document | Purpose |
-|----------|---------|
-| **[SETUP_FRESH_SYSTEM.md](SETUP_FRESH_SYSTEM.md)** | Setup on fresh system without NVIDIA |
-| **[DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md)** | 5-minute quick start guide |
-| **[docs/DOCKER.md](docs/DOCKER.md)** | Complete Docker reference |
-| **[docs/HOST_SETUP.md](docs/HOST_SETUP.md)** | Host prerequisites setup |
-| **[docs/REDHAT_DEPLOYMENT.md](docs/REDHAT_DEPLOYMENT.md)** | RedHat/Rocky specific guide |
-| **[DEPENDENCY_VERSIONS_CORRECTED.md](DEPENDENCY_VERSIONS_CORRECTED.md)** | Dependency versions reference |
-
-## 🎯 Project Features
-
-- ✅ **Auto-Build TensorRT Engine** - Detects GPU and builds optimized engine automatically
-- ✅ **Multi-Camera Support** - Process up to 16 cameras simultaneously
-- ✅ **RedHat Compatible** - Works on Ubuntu, Debian, RHEL, Rocky Linux
-- ✅ **SELinux Support** - Auto-detects and configures SELinux for X11 display
-- ✅ **Persistent Storage** - TensorRT engines persist across container restarts
-- ✅ **Production Ready** - CI/CD, health checks, security scanning
-
-## 🛠️ Available Scripts
-
-| Script | Description |
-|--------|-------------|
-| `./scripts/docker-build.sh` | Build Docker image |
-| `./scripts/docker-run.sh` | Run interactive container |
-| `./scripts/docker-dev.sh` | Run in development mode (source mounted) |
-| `./scripts/deploy-redhat.sh` | Deploy in daemon mode (RedHat optimized) |
-| `./scripts/docker-utils.sh` | Utility commands (logs, stats, health, etc.) |
-| `./scripts/install-nvidia-prerequisites.sh` | Install NVIDIA drivers + nvidia-docker |
-
-## 🐳 Docker Commands
+Descarga desde NGC el modelo `nvidia/tao/peoplenet:deployable_quantized_onnx_v2.6.3`:
 
 ```bash
-# Build image
-./scripts/docker-build.sh
+# Opcion A: Con NGC CLI
+ngc registry model download-version nvidia/tao/peoplenet:deployable_quantized_onnx_v2.6.3 --dest ./models/
 
-# Run interactive
-./scripts/docker-run.sh
-
-# Run with custom API URL
-API_URL=http://172.80.20.22/api ./scripts/docker-run.sh
-
-# Run in background (daemon)
-./scripts/deploy-redhat.sh
-
-# Development mode (live code editing)
-./scripts/docker-dev.sh
-
-# Using docker-compose
-docker-compose up deepstream-app
+# Opcion B: Descarga manual desde https://catalog.ngc.nvidia.com/orgs/nvidia/teams/tao/models/peoplenet
 ```
 
-## 🔍 Troubleshooting
+Coloca los archivos en `models/peoplenet/`:
+```
+models/peoplenet/
+├── resnet34_peoplenet.onnx      # Modelo ONNX (requerido)
+├── resnet34_peoplenet_int8.txt  # Calibracion INT8 (opcional)
+└── labels.txt                   # Se genera automaticamente
+```
 
-### Build fails with "CUDA 12.8 not found"
-- **Fixed**: Use `./scripts/docker-build.sh` (uses correct Dockerfile.x86)
-- Correct versions: CUDA 12.2, TensorRT 8.6.1
+### 3. Configurar API URL
 
-### "nvidia-smi: command not found"
-- **Solution**: Install NVIDIA drivers
-  ```bash
-  sudo ./scripts/install-nvidia-prerequisites.sh
-  sudo reboot
-  ```
+```bash
+export API_URL=http://tu-servidor-laravel/api
+```
 
-### "cannot open display :0" on RedHat
-- **Solution**: Already handled automatically by scripts
-- Scripts detect SELinux and apply `--security-opt label=type:container_runtime_t`
+### 4. Build y Run
 
-### More troubleshooting
-- See [docs/DOCKER.md - Troubleshooting](docs/DOCKER.md#troubleshooting)
-- See [docs/REDHAT_DEPLOYMENT.md](docs/REDHAT_DEPLOYMENT.md) for RedHat-specific issues
+```bash
+# Build
+docker compose -f docker-compose.peoplenet.yml build
 
-## 📊 Technology Stack
+# Run (modo daemon)
+docker compose -f docker-compose.peoplenet.yml up -d
 
-| Component | Version |
-|-----------|---------|
-| **DeepStream** | 8.0.0 |
-| **CUDA** | 12.2 |
-| **TensorRT** | 8.6.1 |
-| **Python** | 3.10 |
-| **YOLO** | 11x (Ultralytics) |
-| **GStreamer** | 1.20.x |
+# Ver logs
+docker compose -f docker-compose.peoplenet.yml logs -f
 
-## 🌐 OS Compatibility
+# Detener
+docker compose -f docker-compose.peoplenet.yml down
+```
 
-The Docker container (Ubuntu 24.04) works on **any Linux host**:
+## API Laravel
 
-| Host OS | Container OS | Compatible? |
-|---------|--------------|-------------|
-| Ubuntu 20.04+ | Ubuntu 24.04 | ✅ Yes |
-| Debian 11+ | Ubuntu 24.04 | ✅ Yes |
-| **RHEL 8/9** | Ubuntu 24.04 | ✅ Yes |
-| **Rocky Linux 8/9** | Ubuntu 24.04 | ✅ Yes |
-| CentOS Stream 8+ | Ubuntu 24.04 | ✅ Yes |
+El sistema espera que la API retorne camaras en este formato:
 
-**Key Point**: The container is always Ubuntu 24.04, regardless of host OS. Host only needs NVIDIA drivers + Docker.
+```json
+GET /api/camaras
+[
+  {
+    "id": 1,
+    "cam_nombre": "Entrada Principal",
+    "cam_ip": "172.80.40.11",
+    "cam_puerto": 554,
+    "cam_usuario": "admin",
+    "cam_contrasena": "password123",
+    "cam_ruta": "/Streaming/Channels/1"
+  }
+]
+```
 
-## 📄 License
+## Funcionamiento
 
-See LICENSE file.
+1. El sistema consulta la API para obtener lista de camaras
+2. Conecta a cada stream RTSP
+3. PeopleNet detecta personas en cada frame
+4. nvdsanalytics cuenta cruces de linea (Entry/Exit)
+5. Los conteos se muestran en logs (y pueden enviarse a la API)
 
-## 🤝 Contributing
+## Configuracion
 
-See CONTRIBUTING.md for development guidelines.
+### Variables de Entorno
 
-## 📧 Support
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `API_URL` | `http://172.80.20.22/api` | URL de la API Laravel |
+| `HEADLESS` | `true` | Modo sin display (produccion) |
 
-For issues and questions:
-- Check [docs/DOCKER.md](docs/DOCKER.md)
-- See troubleshooting guides
-- Open an issue on GitHub
+### Lineas de Cruce
+
+Edita `configs/peoplenet/config_nvdsanalytics.txt` para configurar las lineas de Entry/Exit por camara.
+
+## Estructura
+
+```
+.
+├── Dockerfile.peoplenet          # Dockerfile
+├── docker-compose.peoplenet.yml  # Docker Compose
+├── configs/peoplenet/            # Configuraciones
+│   ├── config_infer_peoplenet.txt
+│   ├── config_nvdsanalytics.txt
+│   └── config_tracker.txt
+├── deepstream_api/
+│   ├── main_peoplenet.py         # Aplicacion principal
+│   └── modules/                  # Modulos Python
+└── models/peoplenet/             # Modelo (usuario descarga)
+```
+
+## Troubleshooting
+
+### "No se encontraron camaras"
+- Verifica que `API_URL` sea correcta
+- Verifica que la API retorne camaras
+
+### "cudaErrorNoDevice"
+- Verifica que nvidia-container-toolkit este instalado
+- Reinicia el contenedor
+
+### "Model file not found"
+- Descarga el modelo PeopleNet y coloca en `models/peoplenet/`
 
 ---
 
-**Version**: 2.0
-**Last Updated**: 2025-11-20
-**Platform**: x86_64 with NVIDIA GPUs
+**Version**: 3.0

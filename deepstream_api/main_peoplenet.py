@@ -11,7 +11,9 @@ Ventajas sobre YOLO:
 - nvdsanalytics hace el line crossing automaticamente
 - Menor complejidad, mayor estabilidad
 """
+import os
 import sys
+import traceback
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
@@ -20,6 +22,10 @@ import pyds
 from typing import Dict, Optional
 from modules.api_client import CameraAPIClient
 from modules.rtsp_builder import RTSPBuilder
+
+# Configuration from environment
+API_URL = os.getenv("API_URL", "http://172.80.20.22/api")
+HEADLESS = os.getenv("HEADLESS", "false").lower() in ("true", "1", "yes")
 
 # Constantes
 PGIE_CLASS_ID_PERSON = 0
@@ -232,10 +238,6 @@ def create_source_bin(index: int, uri: str):
 
 def main():
     """Funcion principal"""
-
-    # Configuracion
-    API_URL = "http://172.80.20.22/api"
-    HEADLESS = False
 
     # Rutas de configuracion
     PGIE_CONFIG = "/app/configs/peoplenet/config_infer_peoplenet.txt"
