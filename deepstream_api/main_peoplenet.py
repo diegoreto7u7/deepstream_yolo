@@ -80,7 +80,7 @@ def analytics_src_pad_buffer_probe(pad, info, u_data):
         while l_user is not None:
             try:
                 user_meta = pyds.NvDsUserMeta.cast(l_user.data)
-                if user_meta.base_meta.meta_type == pyds.NvDsMetaType.NVDS_USER_FRAME_META_NVDSANALYTICS:
+                if user_meta.base_meta.meta_type == pyds.NvDsMetaType.NVDS_FRAME_META_NVDSANALYTICS:
                     analytics_meta = pyds.NvDsAnalyticsFrameMeta.cast(user_meta.user_meta_data)
 
                     # Obtener conteos de cruce de linea
