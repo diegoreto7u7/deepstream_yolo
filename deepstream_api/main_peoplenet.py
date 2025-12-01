@@ -204,8 +204,10 @@ def create_source_bin(index: int, uri: str):
         if name.find("nvv4l2decoder") != -1:
             obj.set_property("drop-frame-interval", 0)
 
-    def cb_newpad(decodebin, decoder_src_pad, data):
+    def cb_newpad(decodebin, decoder_src_pad, user_data):
         caps = decoder_src_pad.get_current_caps()
+        if not caps:
+            return
         gststruct = caps.get_structure(0)
         gstname = gststruct.get_name()
 
@@ -214,7 +216,7 @@ def create_source_bin(index: int, uri: str):
             if not bin_ghost_pad.set_target(decoder_src_pad):
                 print("Failed to set ghost pad target")
 
-    uri_decode_bin.connect("pad-added", cb_newpad)
+    uri_decode_bin.connect("pad-added", cb_newpad, nbin)
     uri_decode_bin.connect("child-added", decodebin_child_added, nbin)
 
     Gst.Bin.add(nbin, uri_decode_bin)
